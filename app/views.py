@@ -13,6 +13,7 @@ from reportlab.lib import colors
 from datetime import date
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from rest_framework.permissions import IsAuthenticated
+import openpyxl
 
 
 @permission_classes([IsAuthenticated])
@@ -41,27 +42,24 @@ def createItem(req):
 
     return Response({"message":"User Create SuccessFully"},status=status.HTTP_201_CREATED)
 
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated,])
 @api_view(['POST'])
-def updateItem(req,pk):
+def updateItem(req, pk):
     item = Items.objects.get(id=pk)
-    itemSerializer = ProductSerializers(instance=item,data=req.data)
-
+    itemSerializer = ProductSerializers(instance=item, data=req.data)
     if itemSerializer.is_valid():
         itemSerializer.save()
         return Response(itemSerializer.data)
     
 
-@api_view(["GET"])
+@api_view(["GET",])
 def pdf_gen(req):
     iterms = Items.objects.all()
-    responce = HttpResponse(content_type="application/pdf")
+    responce = HttpResponse(content_type = "application/pdf")
     responce['Content-Disposition'] = 'attachment; filename="generated_pdf.pdf"'
     doc = SimpleDocTemplate(responce, pagesize=letter)
     elements = []
     styles = getSampleStyleSheet()
-    
-    # Define a custom heading style
     heading_style = ParagraphStyle(
         name='Products',
         parent=styles['Normal'],
@@ -75,11 +73,10 @@ def pdf_gen(req):
     heading_paragraph = Paragraph(heading_text, heading_style)
     elements.append(heading_paragraph)
     table_data = [['Name', 'Dscripton',]]  # Add headings
-
     for item in iterms:
         row = [str(item.name), str(item.description)]  # Adjust the fields accordingly
         table_data.append(row)
-    
+
     table_style = TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.grey), 
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.aliceblue),
@@ -90,12 +87,9 @@ def pdf_gen(req):
         ('BACKGROUND', (0, 1), (-1, -1), colors.aliceblue),
         ('GRID', (0, 0), (-1, -1), 1, colors.black), 
     ])
-
     table_width = 400
     table = Table(table_data, repeatRows=1,colWidths=[table_width / 3] * 3)
     table.setStyle(table_style)
-
-
     cell_style = [
         ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),  # Header cell background color
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),  # Header cell text color
@@ -113,3 +107,20 @@ def pdf_gen(req):
     elements.append(table)
     doc.build(elements)
     return responce
+
+@api_view(['GET'])
+def gen_excel(request):
+    items = Items.objects.all()
+    excel = openpyxl.Workbook()
+    sheet = excel.active
+    sheet['A1'] = "Anbu"
+    sheet["B1"] = "Description"
+
+    for index, item in enumerate(items, start=2):
+        sheet[f'A{index}'] = item.name
+        sheet[f'B{index}'] = item.description
+
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response['Content-Disposition'] = 'attachment; filename=dynamic_excel.xlsx'
+    excel.save(response)
+    return response
