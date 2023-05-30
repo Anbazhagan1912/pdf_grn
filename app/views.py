@@ -13,10 +13,12 @@ from reportlab.lib import colors
 from datetime import date
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from rest_framework.permissions import IsAuthenticated
-import openpyxl
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill,Border, Side,Alignment
+from openpyxl.utils import get_column_letter
 
 
-@permission_classes([IsAuthenticated])
+
 @api_view(["GET"])
 def api_Overview(req):
     over_view ={
@@ -24,7 +26,6 @@ def api_Overview(req):
     }
     return Response({"message":"Api Works","data":over_view})
 
-@permission_classes([IsAuthenticated])
 @api_view(["GET"])
 def get_all(req):
     products = Items.objects.all()
@@ -32,17 +33,13 @@ def get_all(req):
     print(serializer)
     return Response(serializer.data)
 
-@permission_classes([IsAuthenticated])
 @api_view(["POST"])
 def createItem(req):
     user = ProductSerializers(data=req.data)
-
     if user.is_valid():
         user.save()
-
     return Response({"message":"User Create SuccessFully"},status=status.HTTP_201_CREATED)
 
-@permission_classes([IsAuthenticated,])
 @api_view(['POST'])
 def updateItem(req, pk):
     item = Items.objects.get(id=pk)
@@ -110,15 +107,40 @@ def pdf_gen(req):
 
 @api_view(['GET'])
 def gen_excel(request):
+    thin = Side(border_style="thin", color="00000000")
+    border_style =  Border(top=thin, left=thin, right=thin, bottom=thin)
     items = Items.objects.all()
-    excel = openpyxl.Workbook()
+    excel = Workbook()
     sheet = excel.active
-    sheet['A1'] = "Anbu"
+    cell1 = sheet['A1']
+    cell2 = sheet["B1"]
+    cell1.fill = PatternFill(start_color="00FFFF00", end_color="00FFFF00", fill_type="solid")
+    cell2.fill = PatternFill(start_color="00FFFF00", end_color="00FFFF00", fill_type="solid")
+    cell1.border = border_style
+    cell2.border = border_style
+    cell1.alignment = Alignment(horizontal="center", vertical="center")
+    cell2.alignment = Alignment(horizontal="center", vertical="center")
+
+    sheet['A1'] = "Name"
     sheet["B1"] = "Description"
 
     for index, item in enumerate(items, start=2):
+        sheet[f'A{index}'].border = border_style
+        sheet[f'B{index}'].border = border_style
         sheet[f'A{index}'] = item.name
         sheet[f'B{index}'] = item.description
+
+    for column in sheet.columns:
+        max_length = 0
+        column_letter = get_column_letter(column[0].column)
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(cell.value)
+            except:
+                pass
+        adjusted_width = (max_length + 2.2)
+        sheet.column_dimensions[column_letter].width = adjusted_width
 
     response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     response['Content-Disposition'] = 'attachment; filename=dynamic_excel.xlsx'
