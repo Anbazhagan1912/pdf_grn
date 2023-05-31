@@ -5,10 +5,8 @@ from rest_framework.decorators import api_view,permission_classes
 from .serializer import ProductSerializers
 from .models import Items
 from rest_framework import status
-from reportlab.pdfgen import canvas
 from django.http import HttpResponse
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
-from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from datetime import date
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -16,6 +14,15 @@ from rest_framework.permissions import IsAuthenticated
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill,Border, Side,Alignment
 from openpyxl.utils import get_column_letter
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+import matplotlib.pyplot as plt
+import io
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.charts.barcharts import VerticalBarChart
+from matplotlib.backends.backend_pdf import PdfPages
+
+from reportlab.graphics.charts.legends import Legend
 
 
 
@@ -25,6 +32,7 @@ def api_Overview(req):
         'list_all':'all/'
     }
     return Response({"message":"Api Works","data":over_view})
+
 
 @api_view(["GET"])
 def get_all(req):
@@ -51,12 +59,13 @@ def updateItem(req, pk):
 
 @api_view(["GET",])
 def pdf_gen(req):
-    iterms = Items.objects.all()
-    responce = HttpResponse(content_type = "application/pdf")
-    responce['Content-Disposition'] = 'attachment; filename="generated_pdf.pdf"'
-    doc = SimpleDocTemplate(responce, pagesize=letter)
+    items = Items.objects.all()
+    response = HttpResponse(content_type="application/pdf")
+    response['Content-Disposition'] = 'attachment; filename="generated_pdf.pdf"'
+    doc = SimpleDocTemplate(response, pagesize=letter)
     elements = []
     styles = getSampleStyleSheet()
+
     heading_style = ParagraphStyle(
         name='Products',
         parent=styles['Normal'],
@@ -69,41 +78,60 @@ def pdf_gen(req):
     heading_text = 'Products'
     heading_paragraph = Paragraph(heading_text, heading_style)
     elements.append(heading_paragraph)
-    table_data = [['Name', 'Dscripton',]]  # Add headings
-    for item in iterms:
-        row = [str(item.name), str(item.description)]  # Adjust the fields accordingly
+
+    # Create chart data
+    chart_data = [
+        [1000, 500, 700, 1000]
+    ]
+    drawing = Drawing(600, 300)
+    chart = VerticalBarChart()
+    chart.x = 20
+    chart.y = 0
+    chart.width = 400
+    chart.height = 200
+    chart.data = chart_data
+    chart.strokeColor = colors.black
+
+    # Add the chart to the drawing
+    legend = Legend()
+    legend.x = 350
+    legend.y = 10
+    legend.boxAnchor = 'ne'  # Set the position of the legend box
+    legend.columnMaximum = 1  # Set the maximum number of columns in the legend
+    legend.colorNamePairs = [(colors.red, 'Name'),(colors.blue, 'Se'), (colors.blue, 'Sem'),(colors.green,"Value")]
+    legend.fontName = 'Helvetica'
+    legend.fontSize = 10
+
+    drawing.add(legend)
+    drawing.add(chart)
+
+    # Add the drawing to the elements list
+    elements.append(drawing)
+
+    # Create table data
+    table_data = [['Name', 'Description']]
+    for item in items:
+        row = [str(item.name), str(item.description)]
         table_data.append(row)
 
+    # Define table styles
     table_style = TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey), 
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.aliceblue),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), 
-        ('FONTSIZE', (0, 0), (-1, 0), 12), 
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
         ('BACKGROUND', (0, 1), (-1, -1), colors.aliceblue),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black), 
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
     ])
-    table_width = 400
-    table = Table(table_data, repeatRows=1,colWidths=[table_width / 3] * 3)
+
+    # Create the table
+    table = Table(table_data, repeatRows=1, colWidths=[200, 200])
     table.setStyle(table_style)
-    cell_style = [
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),  # Header cell background color
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),  # Header cell text color
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Header cell alignment
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),  # Header cell font
-        ('FONTSIZE', (0, 0), (-1, 0), 12),  # Header cell font size
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),  # Header cell bottom padding
-        ('BACKGROUND', (0, 1), (-1, -1), colors.white),  # Data cell background color
-        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),  # Data cell text color
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),  # Data cell font
-        ('FONTSIZE', (0, 1), (-1, -1), 10),  # Data cell font size
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 10),  # Data cell bottom padding
-    ]
-    table.setStyle(TableStyle(cell_style))
-    elements.append(table)
     doc.build(elements)
-    return responce
+    return response
+
 
 @api_view(['GET'])
 def gen_excel(request):
